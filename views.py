@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render, get_object_or_404
@@ -11,6 +13,8 @@ from . import forms
 from . import models
 from . import search
 
+
+ITEMS_PER_PAGE = getattr(settings, "{{ app_name|upper }}_ITEMS_PER_PAGE", 25)
 
 SUCCESS_MESSAGES = {
     'add_article': _('Article <strong>%(title)s</strong> successfully created.'),
@@ -29,9 +33,22 @@ article_detail = ArticleDetail.as_view()
 def article_list(request, template_name='{{ app_name }}/article_list.html'):
     object_list = models.Article.objects.public()
     object_filter = search.ArticleFilter(request.GET, queryset=object_list)
+
+    page_number = request.GET.get('page')
+    paginator = Paginator(object_filter.qs, ITEMS_PER_PAGE)
+    try:
+        page = paginator.page(page_number)
+    except PageNotAnInteger:
+        page = paginator.page(1)
+    except EmptyPage:
+        # If page is out of range (e.g. 9999), deliver last page of results.
+        page = paginator.page(paginator.num_pages)
+
     return render(request, template_name, {
-        'object_list': object_list,
-        'filter': object_filter,
+        'filter': object_filter.qs,
+        'object_list': page.object_list,
+        'page_obj': page,
+        'paginator': paginator,
     })
 
 
